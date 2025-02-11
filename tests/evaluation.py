@@ -20,22 +20,22 @@ y_scores = df["z_score_similarity"]
 # INVERT TARGET LABELS because lower Z-score means legitimate, higher means spam
 y_true_inverted = 1 - y_true  # Swap spammer (1) ↔ legitimate (0)
 
-### 1️⃣ Compute Corrected AUC-ROC Score
+### Compute Corrected AUC-ROC Score
 auc = roc_auc_score(y_true_inverted, y_scores)  # Use inverted labels
-print(f"🔥 Corrected AUC-ROC Score: {auc:.4f} (1.0 = perfect, 0.5 = random)")
+print(f"Corrected AUC-ROC Score: {auc:.4f} (1.0 = perfect, 0.5 = random)")
 
-### 2️⃣ Find the Best Classification Threshold
+### Find the Best Classification Threshold
 precisions, recalls, thresholds = precision_recall_curve(y_true_inverted, y_scores)
 f1_scores = 2 * (precisions * recalls) / (precisions + recalls + 1e-8)  # Avoid division by zero
 best_threshold = thresholds[np.argmax(f1_scores)]
-print(f"🔹 Best Threshold for classification: {best_threshold:.4f}")
+print(f"Best Threshold for classification: {best_threshold:.4f}")
 
-### 3️⃣ Compute F1-score at the Best Threshold
+### Compute F1-score at the Best Threshold
 y_pred = (y_scores >= best_threshold).astype(int)  # Apply threshold
 f1 = f1_score(y_true_inverted, y_pred)
-print(f"✅ F1-score at best threshold: {f1:.4f}")
+print(f"F1-score at best threshold: {f1:.4f}")
 
-### 4️⃣ Plot Corrected ROC Curve
+### Plot Corrected ROC Curve
 fpr, tpr, _ = roc_curve(y_true_inverted, y_scores)
 plt.figure(figsize=(6, 6))
 plt.plot(fpr, tpr, label=f"ROC Curve (AUC = {auc:.4f})")
@@ -46,7 +46,7 @@ plt.title("Receiver Operating Characteristic (ROC) Curve (Corrected)")
 plt.legend()
 plt.show()
 
-### 5️⃣ Plot Histogram of `z_score_similarity` by Class
+### Plot Histogram of `z_score_similarity` by Class
 plt.figure(figsize=(8, 5))
 plt.hist(df[df["class"] == 1]["z_score_similarity"], bins=30, alpha=0.6, label="Spammers (1)", color='r')
 plt.hist(df[df["class"] == 0]["z_score_similarity"], bins=30, alpha=0.6, label="Legitimate Users (0)", color='b')
