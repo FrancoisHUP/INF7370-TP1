@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import Levenshtein
+from scipy.stats import zscore 
 
 def extract_data_from_file():
     print("\nStarting data extraction...")
@@ -56,11 +57,20 @@ def extract_data(user_file, followings_file, tweets_file, source, class_label):
     print(f"Extraction complete for {source} users.")
     return merged_df
 
-def calculate_min_levenshtein_distance(df):
-    print("\nCalculating min Levenshtein distances...")
+def compute_normalized_levenshtein(tweet1, tweet2):
+    """Computes Levenshtein distance normalized by max length of tweets."""
+    if tweet1 == tweet2:
+        return 0.0  # Identical tweets
+    
+    dist = Levenshtein.distance(tweet1, tweet2)
+    max_len = max(len(tweet1), len(tweet2))
+    return dist / max_len if max_len > 0 else 0  # Avoid division by zero
 
-    def min_distance(tweets):
-        """Calculates the minimum Levenshtein distance between tweets of a user."""
+def calculate_avg_normalized_levenshtein_distance(df):
+    print("\nCalculating average normalized Levenshtein distances...")
+
+    def avg_normalized_distance(tweets):
+        """Calculates the average normalized Levenshtein distance between tweets of a user."""
         if not isinstance(tweets, list) or len(tweets) < 2:
             return np.nan  # Not enough tweets to compute distance
         
@@ -68,19 +78,33 @@ def calculate_min_levenshtein_distance(df):
         if len(tweets) < 2:
             return np.nan  # If filtering results in <2 tweets, return NaN
         
-        min_dist = float("inf")
+        distances = []
+
         for i in range(len(tweets)):
             for j in range(i + 1, len(tweets)):
-                dist = Levenshtein.distance(tweets[i], tweets[j])
-                min_dist = min(min_dist, dist)
-        
-        return min_dist
+                norm_dist = compute_normalized_levenshtein(tweets[i], tweets[j])
+                distances.append(norm_dist)
+
+        return np.mean(distances) if distances else np.nan  # Compute average
 
     tqdm.pandas()
     df["tweet"] = df["tweet"].apply(lambda x: x if isinstance(x, list) else [])  # Ensure tweets are lists
-    df["min_levenshteinDistance"] = df["tweet"].progress_apply(min_distance)
+    df["avg_norm_levenshtein_distance"] = df["tweet"].progress_apply(avg_normalized_distance)
 
     print("Levenshtein distance calculation complete!\n")
+    return df
+
+def calculate_z_score(df):
+    print("\nCalculating Z-score for similarity...")
+
+    # Ensure avg_norm_levenshtein_distance is numeric
+    df["avg_norm_levenshtein_distance"] = pd.to_numeric(df["avg_norm_levenshtein_distance"], errors="coerce")
+
+    # Compute Z-score only for valid rows (ignore NaN values)
+    valid_rows = df["avg_norm_levenshtein_distance"].notna()
+    df.loc[valid_rows, "z_score_similarity"] = zscore(df.loc[valid_rows, "avg_norm_levenshtein_distance"])
+
+    print("Z-score calculation complete!\n")
     return df
 
 def add_number_of_followings_variance(df):
@@ -114,7 +138,6 @@ def save_to_csv(df, output_file):
     df.to_csv(output_file, index=False)
     print(f"Data saved successfully to {output_file}!\n")
 
-
 # Enable tqdm for pandas operations
 tqdm.pandas()
 
@@ -127,8 +150,11 @@ df = clean_data(df)
 # Add the variance of followings
 df = add_number_of_followings_variance(df)
 
-# Add the "min_levenshteinDistance" field
-df = calculate_min_levenshtein_distance(df) # this one takes around 30 min!
+# Compute average normalized Levenshtein distance
+df = calculate_avg_normalized_levenshtein_distance(df)
+
+# Compute Z-score for similarity comparison
+df = calculate_z_score(df)
 
 # Save final dataset
 save_to_csv(df, "preprocessed_data.csv")

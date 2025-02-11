@@ -1,4 +1,6 @@
-levenshtein
+python-Levenshtein
+numba
 tqdm
 numpy
 pandas
+matplotlib
