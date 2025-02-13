@@ -35,7 +35,7 @@ Pour exécuter cette commande, vous devez préalablement avoir téléchargé les
 python features_extraction.py
 ```
 
-Vous pouvez télécharger les données prétraitées avec cette commande (ou sur ce [lien google drive](https://drive.google.com/file/d/16UjfrzSh00xDWD7f_aeJDRGILbd7Esuk/view?usp=drive_link)) :
+Vous pouvez télécharger les données prétraitées avec cette commande (ou sur ce [lien google drive](https://drive.google.com/drive/folders/1InCDKGSWU_g6GxRgGTLD1rFVXgwWVt0F?usp=drive_link)) :
 
 Linux
 
