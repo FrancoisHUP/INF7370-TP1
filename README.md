@@ -72,8 +72,21 @@ Cette commande crée un fichier CSV à la racine nommé "preprocessed_data.csv"
 
 ## Algorithmes et évaluation
 
-TODO
+Pour débuter l'entraînement et l'évaluation des 5 modèles avec des classes équilibrées et déséquilibrées, on utilise cette commande :
 
-## Analyse comparative sur des classes déséquilibrées
+```bash
+python comparison_all_algorithms.py
+```
 
-TODO
+L'exécution crée des fichiers dans les dossiers `output/models` et `output/graphs`.
+
+Les 6 algorithmes sont :
+
+1. Arbre de décision
+2. Bagging
+3. AdaBoost
+4. Boosting de gradient (GBoost)
+5. Forêts d’arbres aléatoires
+6. Classification bayésienne naïve
+
+Les données en entrée contiennent **19 251** utilisateurs légitimes et **20 645** utilisateurs pollueurs. Le test **"classes équilibrées"** diminue le nombre d'utilisateurs pollueurs à 5 % du nombre original (**20 645 × 0.05 = 1 032** utilisateurs pollueurs).

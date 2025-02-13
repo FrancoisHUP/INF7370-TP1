@@ -10,9 +10,11 @@ from sklearn.ensemble import BaggingClassifier, AdaBoostClassifier, GradientBoos
 from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import roc_auc_score, confusion_matrix, roc_curve
 
-# Define output directory
-OUTPUT_DIR = "output/models/"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Define base directories
+BASE_MODEL_DIR = "output/models/"
+BASE_GRAPH_DIR = "output/graphs/"
+os.makedirs(BASE_MODEL_DIR, exist_ok=True)
+os.makedirs(BASE_GRAPH_DIR, exist_ok=True)
 
 class DataLoader:
     """
@@ -36,14 +38,10 @@ class DataLoader:
         # Remove rows with NaN values
         df = df.dropna()
 
-        # Handle class imbalance if specified
-        if self.imbalance_ratio is not None:
-            df = self.balance_classes(df)
-
         return df
 
     def balance_classes(self, df):
-        """Reduces the number of polluters to match the specified imbalance ratio."""
+        """Applies class imbalance only to the training set."""
         legit_users = df[df['class'] == 0]
         polluters = df[df['class'] == 1]
 
@@ -53,12 +51,23 @@ class DataLoader:
         return pd.concat([legit_users, polluters_subset])
 
     def preprocess_data(self):
-        """Splits the dataset into training and testing sets."""
+        """
+        Splits the dataset into training and testing sets.
+        If imbalance is requested, only the training set is modified.
+        """
         X = self.df.drop(columns=['class'])
         y = self.df['class']
 
-        # Split dataset
-        return train_test_split(X, y, test_size=self.test_size, random_state=self.random_state)
+        # Split dataset while keeping the test set unchanged
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=self.test_size, random_state=self.random_state)
+
+        # Apply class imbalance **only to training set**
+        if self.imbalance_ratio is not None:
+            train_df = pd.concat([X_train, y_train], axis=1)
+            train_df = self.balance_classes(train_df)
+            X_train, y_train = train_df.drop(columns=['class']), train_df['class']
+
+        return X_train, X_test, y_train, y_test
 
 class ModelTrainer:
     """
@@ -68,15 +77,23 @@ class ModelTrainer:
         self.name = name
         self.model = model
         self.imbalance_ratio = imbalance_ratio
-        self.results = {}
+
+        # Create unique subdirectories for models and graphs
+        self.model_dir = os.path.join(BASE_MODEL_DIR, self.name)
+        self.graph_dir = os.path.join(BASE_GRAPH_DIR, self.name)
+        os.makedirs(self.model_dir, exist_ok=True)
+        os.makedirs(self.graph_dir, exist_ok=True)
+
+        # Append suffix for imbalance cases
+        self.suffix = f"_imbalanced_{self.imbalance_ratio}" if self.imbalance_ratio else ""
 
     def train_model(self, X_train, y_train):
         """Trains the model and saves it."""
-        print(f"Training {self.name} model...")
+        print(f"Training {self.name} model {'(Imbalanced)' if self.imbalance_ratio else '(Balanced)'}...")
         self.model.fit(X_train, y_train)
 
         # Save trained model
-        model_path = os.path.join(OUTPUT_DIR, f"{self.name}_model.pkl")
+        model_path = os.path.join(self.model_dir, f"{self.name}_model{self.suffix}.pkl")
         joblib.dump(self.model, model_path)
 
         print(f"Model saved to: {model_path}")
@@ -118,12 +135,10 @@ class ModelTrainer:
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
         plt.title(f"ROC Curve - {self.name}")
-
-        # Ensure unique filenames
-        suffix = f"_imbalance_{self.imbalance_ratio}" if self.imbalance_ratio else ""
-        roc_curve_path = os.path.join(OUTPUT_DIR, f"{self.name}_roc_curve{suffix}.png")
-
         plt.legend()
+
+        # Save ROC curve with correct suffix
+        roc_curve_path = os.path.join(self.graph_dir, f"{self.name}_roc_curve{self.suffix}.png")
         plt.savefig(roc_curve_path)
         plt.close()
 
@@ -135,10 +150,8 @@ class ModelTrainer:
         plt.ylabel("Actual")
         plt.title(f"Confusion Matrix - {self.name}")
 
-        # Ensure unique filenames
-        suffix = f"_imbalance_{self.imbalance_ratio}" if self.imbalance_ratio else ""
-        conf_matrix_path = os.path.join(OUTPUT_DIR, f"{self.name}_confusion_matrix{suffix}.png")
-
+        # Save Confusion Matrix with correct suffix
+        conf_matrix_path = os.path.join(self.graph_dir, f"{self.name}_confusion_matrix{self.suffix}.png")
         plt.savefig(conf_matrix_path)
         plt.close()
 
@@ -159,22 +172,10 @@ def comparaison_algorithmes(file_path, imbalance_ratio=None):
     ]
 
     # Train and evaluate all models
-    results = []
     for model in models:
         model.train_model(X_train, y_train)
         model.evaluate_model(X_test, y_test)
-        results.append(model.results)
-
-    # Save results as CSV
-    filename = "model_comparison.csv" if imbalance_ratio is None else f"model_comparison_imbalance_{imbalance_ratio}.csv"
-    results_csv_path = os.path.join(OUTPUT_DIR, filename)
-    results_df = pd.DataFrame(results)
-    results_df.to_csv(results_csv_path, index=False)
-
-    print(f"Results saved to: {results_csv_path}")
 
 if __name__ == "__main__":
-    print("Run task 3 (balanced dataset)")
     comparaison_algorithmes("preprocessed_data.csv")
-    print("Run task 4 (imbalanced dataset with 5% polluters)")
     comparaison_algorithmes("preprocessed_data.csv", imbalance_ratio=0.05)
