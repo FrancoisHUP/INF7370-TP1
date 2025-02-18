@@ -13,8 +13,10 @@ from sklearn.metrics import roc_auc_score, confusion_matrix, roc_curve
 # Define base directories
 BASE_MODEL_DIR = "output/models/"
 BASE_GRAPH_DIR = "output/graphs/"
+BASE_RESULTS_DIR = "output/results/"
 os.makedirs(BASE_MODEL_DIR, exist_ok=True)
 os.makedirs(BASE_GRAPH_DIR, exist_ok=True)
+os.makedirs(BASE_RESULTS_DIR, exist_ok=True)
 
 class DataLoader:
     """
@@ -78,7 +80,7 @@ class ModelTrainer:
         self.model = model
         self.imbalance_ratio = imbalance_ratio
 
-        # Create unique subdirectories for models and graphs
+        # Create unique subdirectories for models, graphs, and results
         self.model_dir = os.path.join(BASE_MODEL_DIR, self.name)
         self.graph_dir = os.path.join(BASE_GRAPH_DIR, self.name)
         os.makedirs(self.model_dir, exist_ok=True)
@@ -172,9 +174,18 @@ def comparaison_algorithmes(file_path, imbalance_ratio=None):
     ]
 
     # Train and evaluate all models
+    results = []
     for model in models:
         model.train_model(X_train, y_train)
         model.evaluate_model(X_test, y_test)
+        results.append(model.results)
+
+    # Save results as CSV
+    filename = f"model_comparison{('_imbalanced_' + str(imbalance_ratio)) if imbalance_ratio else ''}.csv"
+    results_csv_path = os.path.join(BASE_RESULTS_DIR, filename)
+    pd.DataFrame(results).to_csv(results_csv_path, index=False)
+
+    print(f"Results saved to: {results_csv_path}")
 
 if __name__ == "__main__":
     comparaison_algorithmes("preprocessed_data.csv")
