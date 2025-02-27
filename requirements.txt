@@ -1,0 +1,10 @@
+python-Levenshtein
+numba
+tqdm
+numpy
+pandas
+matplotlib
+seaborn
+scipy
+scikit-learn
+joblib
