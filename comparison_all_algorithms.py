@@ -147,9 +147,9 @@ class ModelTrainer:
     def plot_confusion_matrix(self, cm):
         """Plots and saves the Confusion Matrix heatmap."""
         plt.figure(figsize=(6, 5))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=["Legitimate", "Polluter"], yticklabels=["Legitimate", "Polluter"])
-        plt.xlabel("Predicted")
-        plt.ylabel("Actual")
+        sns.heatmap(cm.T, annot=True, fmt="d", cmap="Blues", xticklabels=["Legitimate", "Polluter"], yticklabels=["Legitimate", "Polluter"])
+        plt.xlabel("Actual")
+        plt.ylabel("Predicted")
         plt.title(f"Confusion Matrix - {self.name}")
 
         # Save Confusion Matrix with correct suffix

@@ -89,12 +89,12 @@ def compute_normalized_levenshtein(tweet1, tweet2):
     dist = Levenshtein.distance(tweet1, tweet2)
     max_len = max(len(tweet1), len(tweet2))
     return dist / max_len if max_len > 0 else 0  # Avoid division by zero
-
-def calculate_avg_normalized_levenshtein_distance(df):
-    print("\nCalculating average normalized Levenshtein distances...")
+    
+def calculate_z_score_levenshtein_distance(df):
+    print("\nCalculating average normalized Levenshtein distances and Z-score...")
 
     def avg_normalized_distance(tweets):
-        """Calculates the average normalized Levenshtein distance between tweets of a user."""
+        """Calculates the average normalized Levenshtein distance between tweets."""
         if not isinstance(tweets, list) or len(tweets) < 2:
             return np.nan  # Not enough tweets to compute distance
         
@@ -103,7 +103,6 @@ def calculate_avg_normalized_levenshtein_distance(df):
             return np.nan  # If filtering results in <2 tweets, return NaN
         
         distances = []
-
         for i in range(len(tweets)):
             for j in range(i + 1, len(tweets)):
                 norm_dist = compute_normalized_levenshtein(tweets[i], tweets[j])
@@ -114,8 +113,22 @@ def calculate_avg_normalized_levenshtein_distance(df):
     tqdm.pandas()
     df["tweet"] = df["tweet"].apply(lambda x: x if isinstance(x, list) else [])  # Ensure tweets are lists
     df["avg_norm_levenshtein_distance"] = df["tweet"].progress_apply(avg_normalized_distance)
+    
+    # Convert column to numeric and compute z-score
+    df["avg_norm_levenshtein_distance"] = pd.to_numeric(df["avg_norm_levenshtein_distance"], errors="coerce")
+    valid_rows = df["avg_norm_levenshtein_distance"].notna()
+    df.loc[valid_rows, "z_score_similarity"] = zscore(df.loc[valid_rows, "avg_norm_levenshtein_distance"])
 
-    print("Levenshtein distance calculation complete!\n")
+    # Ensure positive values by applying Min-Max Scaling
+    if valid_rows.sum() > 0:  # Check if there are valid rows
+        z_min = df.loc[valid_rows, "z_score_similarity"].min()
+        z_max = df.loc[valid_rows, "z_score_similarity"].max()
+        df.loc[valid_rows, "z_score_similarity"] = (df.loc[valid_rows, "z_score_similarity"] - z_min) / (z_max - z_min)
+
+    # Drop the intermediate column
+    df.drop(columns=["avg_norm_levenshtein_distance"], inplace=True)
+
+    print("Average normalized Levenshtein distance and Z-score calculation complete!\n")
     return df
 
 def calculate_account_lifetime(df):
@@ -203,19 +216,6 @@ def calculate_avg_and_max_time_between_tweets(df):
     print("Maximum time between tweets calculation complete!\n")
     return df
 
-def calculate_z_score(df):
-    print("\nCalculating Z-score for similarity...")
-
-    # Ensure avg_norm_levenshtein_distance is numeric
-    df["avg_norm_levenshtein_distance"] = pd.to_numeric(df["avg_norm_levenshtein_distance"], errors="coerce")
-
-    # Compute Z-score only for valid rows (ignore NaN values)
-    valid_rows = df["avg_norm_levenshtein_distance"].notna()
-    df.loc[valid_rows, "z_score_similarity"] = zscore(df.loc[valid_rows, "avg_norm_levenshtein_distance"])
-
-    print("Z-score calculation complete!\n")
-    return df
-
 def add_number_of_followings_variance(df):
     print("\nCalculating variance of followings...")
 
@@ -233,7 +233,7 @@ def add_number_of_followings_variance(df):
 
 def remove_uneccessary_columns(df):
     print("\nRemoving all but relevant columns...")
-    df = df.drop(columns=["user_id", "created_at", "collected_at", "num_tweets", "tweet", "tweet_created_at", "num_mentions", "num_urls"])
+    df = df.drop(columns=["user_id", "created_at", "collected_at", "num_tweets", "tweet", "tweet_created_at", "num_mentions", "num_urls", "followings"])
     print("All but relevant columns removed!\n")
 
     return df
@@ -268,10 +268,7 @@ df = clean_data(df)
 df = add_number_of_followings_variance(df)
 
 # Compute average normalized Levenshtein distance
-df = calculate_avg_normalized_levenshtein_distance(df)
-
-# Compute Z-score for similarity comparison
-df = calculate_z_score(df)
+df = calculate_z_score_levenshtein_distance(df)
 
 # Calculate account lifetime
 df = calculate_account_lifetime(df)
