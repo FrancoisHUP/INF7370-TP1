@@ -3,7 +3,6 @@ import numpy as np
 from tqdm import tqdm
 import Levenshtein
 from scipy.stats import zscore 
-
 def extract_data_from_file():
     print("\nStarting data extraction...")
 
@@ -34,28 +33,53 @@ def extract_data(user_file, followings_file, tweets_file, source, class_label):
                     "num_tweets", "length_screen_name", "length_description"]
     user_df = pd.read_csv(user_file, sep="\t", names=user_columns)
 
+    user_df["created_at"] = pd.to_datetime(user_df["created_at"], errors="coerce")
+    user_df["collected_at"] = pd.to_datetime(user_df["collected_at"], errors="coerce")
+
     # Read the followings file
     followings_df = pd.read_csv(followings_file, sep="\t", names=["user_id", "followings"])
     followings_df["followings"] = followings_df["followings"].fillna("").astype(str)
 
     # Read the tweets file
     tweets_df = pd.read_csv(tweets_file, sep="\t", names=["user_id", "tweet_id", "tweet", "tweet_created_at"])
-
     # Convert timestamps to datetime format
     tweets_df["tweet_created_at"] = pd.to_datetime(tweets_df["tweet_created_at"], errors="coerce")
+    
+    # Dataframe to calculate stats from tweets
+    tweets_stats = tweets_df.groupby("user_id").agg({"tweet": list, "tweet_created_at": list}).reset_index()
+    print(tweets_stats.dtypes)
+    print(tweets_stats.head(10))
 
-    # Aggregate tweets per user
-    tweets_grouped = tweets_df.groupby("user_id")["tweet"].apply(list).reset_index()
+    # Calculate mentions (@)
+    tweets_stats = calculate_mentions(tweets_stats)
+
+    # Calculate URLs (http)
+    tweets_stats = calculate_url(tweets_stats)
+
+    # Calculate average and max time between tweets
+    tweets_stats[["avg_time_between_tweets", "max_time_between_tweets"]] = tweets_stats["tweet_created_at"].apply(calculate_mean_and_max_time)
+
+    print("tweets stats")
+    print(tweets_stats.dtypes)
+    print(tweets_stats.head(10))
 
     # Merge all dataframes on user_id
     merged_df = pd.merge(user_df, followings_df, on="user_id", how="left")
-    merged_df = pd.merge(merged_df, tweets_grouped, on="user_id", how="left")
+    merged_df = pd.merge(merged_df, tweets_stats, on="user_id", how="left")
 
     # Add numerical class column
     merged_df["class"] = class_label
 
     print(f"Extraction complete for {source} users.")
     return merged_df
+
+def calculate_mean_and_max_time(timestamps):
+        valid_times = [pd.to_datetime(t) for t in timestamps if pd.notna(t)]
+        if len(valid_times) < 2:
+            return pd.Series([np.nan, np.nan])
+        valid_times.sort()
+        diffs = [(valid_times[i] - valid_times[i - 1]).total_seconds() for i in range(1, len(valid_times))]
+        return pd.Series([np.mean(diffs), max(diffs)])
 
 def compute_normalized_levenshtein(tweet1, tweet2):
     """Computes Levenshtein distance normalized by max length of tweets."""
@@ -94,6 +118,91 @@ def calculate_avg_normalized_levenshtein_distance(df):
     print("Levenshtein distance calculation complete!\n")
     return df
 
+def calculate_account_lifetime(df):
+    print("Calculating account lifetime...")
+    df["account_lifetime_days"] = (df["collected_at"] - df["created_at"]).dt.days
+    return df
+
+def calculate_mentions(df):
+    print("\nCounting @ mentions in tweets...")
+
+    df["tweet"] = df["tweet"].apply(lambda x: x if isinstance(x, list) else [])
+
+    df["num_mentions"] = df["tweet"].apply(lambda tweets: sum(str(tweet).count("@") for tweet in tweets if isinstance(tweet, str)))
+
+    print("Counting @ mentions complete!\n")
+    return df
+
+def calculate_url(df):
+    print("\nCounting URLs in tweets...")
+
+    df["tweet"] = df["tweet"].apply(lambda x: x if isinstance(x, list) else [])
+
+    df["num_urls"] = df["tweet"].apply(lambda tweets: sum(tweet.count("http") for tweet in tweets if isinstance(tweet, str)))
+
+    print("Counting URLs complete!\n")
+    return df
+
+def calculate_mentions_urls_ratio(df):
+    df["mentions_ratio"] = df.apply(lambda row: row["num_mentions"] / row["num_tweets"] if row["num_tweets"] > 0 else np.nan, axis=1)
+    df["url_ratio"] = df.apply(lambda row: row["num_urls"] / row["num_tweets"] if row["num_tweets"] > 0 else np.nan, axis=1)
+    return df
+
+def calculate_following_follower_ratio(df):
+    print("\nCalculating following/follower ratio...")
+
+    df["following_follower_ratio"] = df.apply(
+        lambda row: row["num_followings"] / row["num_followers"]
+        if row["num_followers"] > 0 else np.nan, axis=1
+    )
+
+    print("Following/Follower ratio calculation complete!\n")
+    return df
+
+
+def calculate_tweets_per_day(df):
+    df["num_tweets"] = pd.to_numeric(df["num_tweets"], errors="coerce")
+    
+    df["tweets_per_day"] = df.apply(
+        lambda row: row["num_tweets"] / row["account_lifetime_days"]
+        if row["account_lifetime_days"] > 0 else np.nan, axis=1
+    )
+
+    print("Tweets per day calculation complete!\n")
+    return df
+
+def calculate_avg_and_max_time_between_tweets(df):
+    
+    df["tweet"] = df["tweet"].apply(lambda x: x if isinstance(x, list) else [])
+
+    def avg_time_between_tweets(tweets):
+        timestamps = [pd.to_datetime(t) for t in tweets if pd.notna(t)] 
+        timestamps.sort()  
+
+        if len(timestamps) < 2:
+            return np.nan  
+
+        diffs = [(timestamps[i] - timestamps[i - 1]).total_seconds() for i in range(1, len(timestamps))]
+        return np.mean(diffs) if diffs else np.nan 
+    
+    def max_time_between_tweets(tweets):
+        timestamps = [pd.to_datetime(t) for t in tweets if pd.notna(t)]  
+        timestamps.sort() 
+
+        if len(timestamps) < 2:
+            return np.nan  
+
+        diffs = [(timestamps[i] - timestamps[i - 1]).total_seconds() for i in range(1, len(timestamps))]
+        return max(diffs) if diffs else np.nan  
+    
+    print("\nCalculating average time between tweets...")
+    df["avg_time_between_tweets"] = df["tweet"].apply(avg_time_between_tweets)
+    print("Average time between tweets calculation complete!\n")
+    print("\nCalculating maximum time between tweets...")
+    df["max_time_between_tweets"] = df["tweet"].apply(max_time_between_tweets)
+    print("Maximum time between tweets calculation complete!\n")
+    return df
+
 def calculate_z_score(df):
     print("\nCalculating Z-score for similarity...")
 
@@ -122,6 +231,13 @@ def add_number_of_followings_variance(df):
     print("Variance of followings calculation complete!\n")
     return df
 
+def remove_uneccessary_columns(df):
+    print("\nRemoving all but relevant columns...")
+    df = df.drop(columns=["user_id", "created_at", "collected_at", "num_tweets", "tweet", "tweet_created_at", "num_mentions", "num_urls"])
+    print("All but relevant columns removed!\n")
+
+    return df
+
 def clean_data(df):
     print("\nCleaning data (dropping missing values)...")
     df = df.dropna()
@@ -137,6 +253,7 @@ def save_to_csv(df, output_file):
 
     df.to_csv(output_file, index=False)
     print(f"Data saved successfully to {output_file}!\n")
+
 
 # Enable tqdm for pandas operations
 tqdm.pandas()
@@ -156,5 +273,22 @@ df = calculate_avg_normalized_levenshtein_distance(df)
 # Compute Z-score for similarity comparison
 df = calculate_z_score(df)
 
+# Calculate account lifetime
+df = calculate_account_lifetime(df)
+
+# Calculate Following/Follower ratio
+df = calculate_following_follower_ratio(df)
+
+# Calculate number of tweets per day
+df = calculate_tweets_per_day(df)
+
+# Calculate the ratio of mentions and URLS
+df = calculate_mentions_urls_ratio(df)
+
+# Removing all but necessary columns 
+df = remove_uneccessary_columns(df)
+
+print(df.dtypes)
+print(df.head(10))
 # Save final dataset
 save_to_csv(df, "preprocessed_data.csv")
