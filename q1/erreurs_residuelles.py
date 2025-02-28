@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
 
-# Définition du dataset
 data = pd.DataFrame({
     "nombre_de_tweets": [1087, 1200, 1000, 890, 500, 950],
     "similarité_tweets": [3.10, 0.1, 1.6, 1.5, 2.5, 1.0],
@@ -10,11 +9,9 @@ data = pd.DataFrame({
     "classe": [1, 0, 0, 1, 0, 1]
 })
 
-# Séparation des features et de la cible
 X = data[["nombre_de_tweets", "similarité_tweets", "fréquence_tweets"]]
 y = data["classe"]
 
-# Entraînement de l'arbre de décision
 dt_clf = DecisionTreeClassifier(max_depth=2, random_state=42)
 dt_clf.fit(X, y)
 
