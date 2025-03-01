@@ -55,20 +55,22 @@ Cette commande crée un fichier CSV à la racine nommé "preprocessed_data.csv"
 
 | Nom de la colonne                 | Type de données | Description                                                                                                      |
 | --------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **user_id**                       | `int`           | Identifiant unique pour chaque utilisateur.                                                                      |
-| **created_at**                    | `datetime`      | Horodatage indiquant la date de création du compte Twitter.                                                      |
-| **collected_at**                  | `datetime`      | Horodatage indiquant la date de collecte des données utilisateur.                                                |
 | **num_followings**                | `int`           | Nombre de comptes suivis par l'utilisateur.                                                                      |
 | **num_followers**                 | `int`           | Nombre d'abonnés de l'utilisateur.                                                                               |
-| **num_tweets**                    | `int`           | Nombre total de tweets publiés par l'utilisateur.                                                                |
 | **length_screen_name**            | `int`           | Longueur du nom d'utilisateur Twitter.                                                                           |
 | **length_description**            | `int`           | Longueur de la description du profil utilisateur.                                                                |
-| **followings**                    | `string`        | Liste des identifiants des utilisateurs suivis, séparés par des virgules.                                        |
+| **avg_time_between_tweets**       | `float`         | Temps moyen en secondes entre 2 tweets.                                                                          |
+| **max_time_between_tweets**       | `float`         | Temps maximal en secondes entre 2 tweets.                                                                        |
+| **class**                         | `int`           | **Étiquette cible pour la classification :**<br> - `0` : Utilisateur légitime<br> - `1` : Pollueur (compte spam) |
 | **variance_of_followings**        | `float`         | Variance des identifiants des utilisateurs suivis, représentant la dispersion des valeurs.                       |
-| **tweet**                         | `list`          | Liste des tweets publiés par l'utilisateur.                                                                      |
 | **avg_norm_levenshtein_distance** | `float`         | Moyenne de la distance de Levenshtein normalisée entre les tweets de l'utilisateur, mesurant leur similarité.    |
 | **z_score_similarity**            | `float`         | Score normalisé (Z-score) de la similarité des tweets de l'utilisateur par rapport aux autres utilisateurs.      |
-| **class**                         | `int`           | **Étiquette cible pour la classification :**<br> - `0` : Utilisateur légitime<br> - `1` : Pollueur (compte spam) |
+| **account_lifetime_days**         | `int`           | Durée de vie du compte en jours.                                                                                 |
+| **following_follower_ratio**      | `float`         | Rapport following/followers.                                                                                     |
+| **tweets_per_day**                | `float`         | Nombre de tweets par jour.                                                                                       |
+| **mentions_ratio**                | `float`         | Rapport de mentions par tweet.                                                                                   |
+| **url_ratio**                     | `float`         | Rapport d'URL par tweet.                                                                                         |
+
 
 ## Algorithmes et évaluation
 
