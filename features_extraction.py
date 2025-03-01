@@ -41,14 +41,14 @@ def extract_data(user_file, followings_file, tweets_file, source, class_label):
     followings_df["followings"] = followings_df["followings"].fillna("").astype(str)
 
     # Read the tweets file
-    tweets_df = pd.read_csv(tweets_file, sep="\t", names=["user_id", "tweet_id", "tweet", "tweet_created_at"])
+    tweets_df = pd.read_csv(tweets_file, sep="\t", quoting=3, on_bad_lines="skip", names=["user_id", "tweet_id", "tweet", "tweet_created_at"])
     # Convert timestamps to datetime format
     tweets_df["tweet_created_at"] = pd.to_datetime(tweets_df["tweet_created_at"], errors="coerce")
     
     # Dataframe to calculate stats from tweets
     tweets_stats = tweets_df.groupby("user_id").agg({"tweet": list, "tweet_created_at": list}).reset_index()
-    print(tweets_stats.dtypes)
-    print(tweets_stats.head(10))
+
+    
 
     # Calculate mentions (@)
     tweets_stats = calculate_mentions(tweets_stats)
@@ -57,11 +57,7 @@ def extract_data(user_file, followings_file, tweets_file, source, class_label):
     tweets_stats = calculate_url(tweets_stats)
 
     # Calculate average and max time between tweets
-    tweets_stats[["avg_time_between_tweets", "max_time_between_tweets"]] = tweets_stats["tweet_created_at"].apply(calculate_mean_and_max_time)
-
-    print("tweets stats")
-    print(tweets_stats.dtypes)
-    print(tweets_stats.head(10))
+    tweets_stats = calculate_avg_and_max_time_between_tweets(tweets_stats)
 
     # Merge all dataframes on user_id
     merged_df = pd.merge(user_df, followings_df, on="user_id", how="left")
@@ -141,24 +137,18 @@ def calculate_mentions(df):
 
     df["tweet"] = df["tweet"].apply(lambda x: x if isinstance(x, list) else [])
 
-    df["num_mentions"] = df["tweet"].apply(lambda tweets: sum(str(tweet).count("@") for tweet in tweets if isinstance(tweet, str)))
+    df["mentions_ratio"] = df["tweet"].apply(lambda tweets: sum(tweet.count("http") for tweet in tweets if isinstance(tweet, str)) / len(tweets) if len(tweets) > 0 else 0 )
 
     print("Counting @ mentions complete!\n")
     return df
 
 def calculate_url(df):
     print("\nCounting URLs in tweets...")
-
     df["tweet"] = df["tweet"].apply(lambda x: x if isinstance(x, list) else [])
 
-    df["num_urls"] = df["tweet"].apply(lambda tweets: sum(tweet.count("http") for tweet in tweets if isinstance(tweet, str)))
+    df["url_ratio"] = df["tweet"].apply(lambda tweets: sum(tweet.count("http") for tweet in tweets if isinstance(tweet, str)) / len(tweets) if len(tweets) > 0 else 0 )
 
     print("Counting URLs complete!\n")
-    return df
-
-def calculate_mentions_urls_ratio(df):
-    df["mentions_ratio"] = df.apply(lambda row: row["num_mentions"] / row["num_tweets"] if row["num_tweets"] > 0 else np.nan, axis=1)
-    df["url_ratio"] = df.apply(lambda row: row["num_urls"] / row["num_tweets"] if row["num_tweets"] > 0 else np.nan, axis=1)
     return df
 
 def calculate_following_follower_ratio(df):
@@ -185,35 +175,38 @@ def calculate_tweets_per_day(df):
     return df
 
 def calculate_avg_and_max_time_between_tweets(df):
+    df["tweet_created_at"] = df["tweet_created_at"].apply(lambda x: x if isinstance(x, list) else [])
     
-    df["tweet"] = df["tweet"].apply(lambda x: x if isinstance(x, list) else [])
-
+  
     def avg_time_between_tweets(tweets):
         timestamps = [pd.to_datetime(t) for t in tweets if pd.notna(t)] 
         timestamps.sort()  
-
+        
         if len(timestamps) < 2:
-            return np.nan  
-
+            return np.nan  # Return NaN if there are less than 2 timestamps
+        
         diffs = [(timestamps[i] - timestamps[i - 1]).total_seconds() for i in range(1, len(timestamps))]
-        return np.mean(diffs) if diffs else np.nan 
+        return np.mean(diffs) if diffs else np.nan
     
+    # Function to calculate the maximum time between tweets
     def max_time_between_tweets(tweets):
         timestamps = [pd.to_datetime(t) for t in tweets if pd.notna(t)]  
         timestamps.sort() 
 
         if len(timestamps) < 2:
-            return np.nan  
+            return np.nan 
 
         diffs = [(timestamps[i] - timestamps[i - 1]).total_seconds() for i in range(1, len(timestamps))]
         return max(diffs) if diffs else np.nan  
-    
+
     print("\nCalculating average time between tweets...")
-    df["avg_time_between_tweets"] = df["tweet"].apply(avg_time_between_tweets)
+    df["avg_time_between_tweets"] = df["tweet_created_at"].apply(avg_time_between_tweets)
     print("Average time between tweets calculation complete!\n")
+    
     print("\nCalculating maximum time between tweets...")
-    df["max_time_between_tweets"] = df["tweet"].apply(max_time_between_tweets)
+    df["max_time_between_tweets"] = df["tweet_created_at"].apply(max_time_between_tweets)
     print("Maximum time between tweets calculation complete!\n")
+    
     return df
 
 def add_number_of_followings_variance(df):
@@ -233,7 +226,7 @@ def add_number_of_followings_variance(df):
 
 def remove_uneccessary_columns(df):
     print("\nRemoving all but relevant columns...")
-    df = df.drop(columns=["user_id", "created_at", "collected_at", "num_tweets", "tweet", "tweet_created_at", "num_mentions", "num_urls", "followings"])
+    df = df.drop(columns=["user_id", "created_at", "collected_at", "num_tweets", "tweet", "tweet_created_at", "followings"])
     print("All but relevant columns removed!\n")
 
     return df
@@ -242,6 +235,36 @@ def clean_data(df):
     print("\nCleaning data (dropping missing values)...")
     df = df.dropna()
     print("Data cleaning complete!\n")
+    return df
+
+def clean_data_display(df):
+    print("\nCleaning data (dropping missing values)...")
+    rows_before = len(df)
+
+    # Sélectionner les lignes avec au moins 1 NaN
+    dropped_df = df[df.isna().any(axis=1)]
+
+    # Sauvegarder les lignes supprimées
+    if not dropped_df.empty:
+        dropped_df.to_csv("deleted_rows.csv", index=False)
+        print(f"Deleted rows saved in deleted_rows.csv")
+
+    nan_counts = df.isna().sum()
+    nan_columns = nan_counts[nan_counts > 0]
+
+    print("\nColumns with missing values :")
+    print(nan_columns.to_string())
+    print(f"\nTotal columns with missing values : {len(nan_columns)}")
+
+    df = df.dropna()
+
+    rows_after = len(df)
+    rows_dropped = rows_before - rows_after
+    percent_dropped = (rows_dropped / rows_before) * 100 if rows_before > 0 else 0
+
+    print("\nData cleaning complete!")
+    print(f"Deleted rows : {rows_dropped} on {rows_before} ({percent_dropped:.2f}%)")
+    
     return df
 
 def save_to_csv(df, output_file):
@@ -261,9 +284,6 @@ tqdm.pandas()
 # Extract data
 df = extract_data_from_file()
 
-# Clean data
-df = clean_data(df)
-
 # Add the variance of followings
 df = add_number_of_followings_variance(df)
 
@@ -279,13 +299,9 @@ df = calculate_following_follower_ratio(df)
 # Calculate number of tweets per day
 df = calculate_tweets_per_day(df)
 
-# Calculate the ratio of mentions and URLS
-df = calculate_mentions_urls_ratio(df)
-
 # Removing all but necessary columns 
 df = remove_uneccessary_columns(df)
 
-print(df.dtypes)
-print(df.head(10))
+df = clean_data(df)
 # Save final dataset
 save_to_csv(df, "preprocessed_data.csv")
